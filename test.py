@@ -1,30 +1,20 @@
-#!/usr/bin/env python
-# coding: utf-8
 
 import os
 import pandas as pd
-pd.options.mode.chained_assignment = None
-pd.set_option('display.max_columns', 900)
-
-import queue
-import threading
-import time
 import multiprocessing as mp
 from multiprocessing import Lock, Process, Queue, current_process
-import queue
 from functools import partial
+import numpy as np
 
 
-# # Calculating Support
-#item matrix with support of to items
-def calc_support_of_column(value, column, transactions, relative=True):
-
-    for i in range(0, len(column.index)):        
-        column[column.index[i]] = calc_support(value, column.index[i], transactions, relative) 
-    return column
+def calc_support_of_column(item1, item2, support, transactions):
+    print('Begin with column: ', item2)
+    res = list(map(partial(calc_support, item2=item2, support=support, transactions=transactions), item1))
+    print('Finished column: ', item2)
+    return pd.Series(res, index=item1, name=item2)
 
 
-def calc_support( item1, item2, transactions, relative):
+def calc_support(item1, item2, support, transactions, relative=True):
     conjunction = 0
     joint = 0
 
@@ -39,21 +29,9 @@ def calc_support( item1, item2, transactions, relative):
         return conjunction/len(transactions)
 
 
-def process_data(column_index, support, transactions):
-    pid = os.getpid()
-
-    result = calc_support_of_column(
-        support.columns[column_index], 
-        support[support.columns[column_index]].copy(), 
-        transactions
-    )
-
-    #if (column_index % 100 == 0):
-    print ("%s processing %s" % (pid, column_index), flush=True)
-    return result
-
-
 def main():
+    print('Main Process: ', os.getpid())
+    
     # Loading Data
     data_path = os.path.join(os.getcwd(), 'data')
     ratings = pd.read_csv(os.path.join(data_path, 'ratings_small.csv'),  low_memory=False)
@@ -86,29 +64,32 @@ def main():
     movie_items = sorted(movie_items)
 
     support = pd.DataFrame(columns=movie_items, index=movie_items)
-    support = support[:10]
-
+    support = support.iloc[:,0:3]
 
     pool = mp.Pool(processes=mp.cpu_count())
 
-    # print the output
-    resultFrame = pd.DataFrame()    
-    print(len(support))
-    print(len(support.columns))
-    #for i in range(len(support)):
+    results = []
     for i in range(len(support.columns)):
-        print(i)
-        column = pool.apply(process_data, [i,  support, transactions])
-        resultFrame[column.name] = column
+        results.append(pool.apply_async(calc_support_of_column, 
+            args = (support[support.columns[i]].index, support.columns[i], support, transactions),
+            ))
 
+    pool.close()
+    pool.join()
 
-    print ("Exiting Main Process", flush=True)
+    print('Sub processes terminated')
 
-    resultFrame = resultFrame.sort_index(axis=1)
-    resultFrame.to_csv('support_small_process.csv')
+    count = 0
+    for result in results:
+        if(count % 100 == 0):
+            print(count, 'results processed')
+        column = result.get()
+        support[column.name] = column
+        count+=1
 
+    print(support.head())
 
-            
+    support.to_csv('support_small_multiprocess_vectorized_test.csv')
 
 if __name__=='__main__':
     main()

@@ -8,7 +8,6 @@ import numpy as np
 
 
 def calc_support_of_column(item1, item2, support, transactions):
-
 	res = list(map(partial(calc_support, item2=item2, support=support, transactions=transactions), item1))
 	return pd.Series(res, index=item1, name=item2)
 
@@ -27,8 +26,8 @@ def calc_support(item1, item2, support, transactions, relative=True):
 	else:
 		return conjunction/len(transactions)
 
-def main():
 
+def main():
 	print('Main Process: ', os.getpid())
 	
 	# Loading Data
